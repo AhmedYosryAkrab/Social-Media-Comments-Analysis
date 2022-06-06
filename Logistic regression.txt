@@ -1,0 +1,105 @@
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from nltk.stem import PorterStemmer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+import re
+import numpy as np
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
+from sklearn import preprocessing
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn import metrics
+from sklearn.metrics import f1_score
+
+!pip install -U -q PyDrive
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
+from google.colab import auth
+from oauth2client.client import GoogleCredentials
+
+auth.authenticate_user()
+gauth = GoogleAuth()
+gauth.credentials = GoogleCredentials.get_application_default()
+drive = GoogleDrive(gauth)
+
+downloaded = drive.CreateFile({'id':'1kri6Ae0MqbHPsToPLoT6ZngmwGTeUtnS'})
+downloaded.GetContentFile('train.csv')
+
+df= pd.read_csv('train.csv',encoding='latin-1')
+df.head()
+
+downloaded = drive.CreateFile({'id':'1W3kHCE8ER_8KnP8pf9ap78xi9niPGoFC'})
+downloaded.GetContentFile('stopwords.txt')
+
+stopwords = open("stopwords.txt",'r').read()
+stopwords = stopwords.split('\n')
+stopwords
+
+def stopwords_remove(text):
+    text        = text.lower()
+    words       = text.split(' ')
+    clean_words = []
+    for word in words:
+        if not word in stopwords:
+            clean_words.append(word)
+    return ' '.join(clean_words)
+
+def denoise(text):
+    return re.sub("[^a-zA-Z ]*","",text).strip()
+
+ps = PorterStemmer()
+
+def stemm(text):
+    clean_text = ""
+    for word in text.split():
+        clean_text +=" "+ps.stem(word)
+    return clean_text
+
+def clean(text):
+    text = stopwords_remove(text)
+    text = denoise(text)
+    text = stemm(text)
+    return text
+
+df['clean_text'] = df.tweet.apply(clean)
+df.head()
+
+lb_make = LabelEncoder()
+cv = CountVectorizer()
+
+X=df.iloc[:,3]
+
+X = cv.fit_transform(X)
+
+Y=df["label"] = lb_make.fit_transform(df["label"])
+
+x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.3, random_state=42)
+
+logisticRegr = LogisticRegression()
+
+logisticRegr.fit(x_train, y_train)
+
+y_pred = logisticRegr.predict(x_test)
+
+score = logisticRegr.score(x_test, y_test)
+
+score
+
+score*100
+
+cm = metrics.confusion_matrix(y_test, y_pred)
+
+cm
+
+
+plt.figure(figsize=(9,9))
+sns.heatmap(cm, annot=True, fmt=".3f", linewidths=.5, square = True, cmap = 'Blues_r');
+plt.ylabel('Actual label');
+plt.xlabel('Predicted label');
+all_sample_title = 'Accuracy Score: {0}'.format(score)
+plt.title(all_sample_title, size = 15);
+
+f1_score(y_test, y_pred)
